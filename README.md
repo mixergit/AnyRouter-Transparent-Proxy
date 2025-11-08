@@ -9,7 +9,8 @@
 - 🔒 **标准兼容**：严格按照 RFC 7230 规范过滤 hop-by-hop 头部
 - 🎯 **灵活配置**：支持自定义目标 URL、请求头注入和 System Prompt 替换
 - 📍 **链路追踪**：自动维护 X-Forwarded-For 链，便于追踪客户端 IP
-- ⚡ **高性能**：基于异步架构，高效处理并发请求
+- ⚡ **高性能**：基于异步架构，连接池复用，高效处理并发请求
+- 🔧 **智能处理**：自动计算 Content-Length，避免请求体修改导致的长度不匹配错误
 
 ## 🎯 核心功能
 
@@ -25,6 +26,7 @@
 
 - **自动过滤**：移除 hop-by-hop 头部（Connection、Keep-Alive 等）
 - **Host 重写**：自动将 Host 头改写为目标服务器域名
+- **Content-Length 自动计算**：移除原始 Content-Length，由 httpx 根据实际内容自动计算
 - **自定义注入**：支持覆盖或添加任意自定义请求头
 - **IP 追踪**：智能维护 X-Forwarded-For 链
 
@@ -77,13 +79,8 @@ PRESERVE_HOST = False
 ### System Prompt 替换
 
 ```python
-# 设置为字符串以启用替换，设置为 None 则禁用
+# 设置为字符串以启用替换，设置为 None 则禁用替换
 SYSTEM_PROMPT_REPLACEMENT = "You are Claude Code, Anthropic's official CLI for Claude."
-
-# 常见场景示例：
-# Claude Code CLI: "You are Claude Code, Anthropic's official CLI for Claude."
-# Claude Agent: "You are a Claude agent, built on Anthropic's Claude Agent SDK."
-# 自定义助手: "你是一个专业的Python编程助手"
 ```
 
 ### 自定义请求头
@@ -114,15 +111,6 @@ curl http://localhost:8088/v1/messages \
   -d '{"model": "claude-3-5-sonnet-20241022", ...}'
 ```
 
-### Claude Code 配置
-
-修改 Claude Code 配置使用此代理：
-
-```bash
-# 设置环境变量
-export ANTHROPIC_BASE_URL=http://localhost:8088
-```
-
 ## 🏗️ 架构设计
 
 ### 请求处理流程
@@ -148,16 +136,19 @@ StreamingResponse 流式返回给客户端
 ### 关键组件
 
 - **路由处理**：`@app.api_route("/{path:path}")` 捕获所有路径
-- **异步客户端**：`httpx.AsyncClient` 处理上游请求，60秒超时
+- **生命周期管理**：使用 FastAPI lifespan 事件管理 HTTP 客户端生命周期
+- **共享客户端池**：全局共享 `httpx.AsyncClient` 实现连接复用，提升性能
+- **异步请求**：60秒超时，支持长时间流式响应
 - **流式传输**：`StreamingResponse` + `aiter_bytes()` 高效处理大载荷
-- **头部过滤**：符合 RFC 7230 规范，双向过滤 hop-by-hop 头部
+- **头部过滤**：符合 RFC 7230 规范，双向过滤 hop-by-hop 头部和 Content-Length
 
 ## 🔧 技术细节
 
 ### 请求头过滤规则
 
-根据 RFC 7230 规范，自动移除以下 hop-by-hop 头部：
+根据 RFC 7230 规范，自动移除以下头部：
 
+**Hop-by-hop 头部：**
 - Connection
 - Keep-Alive
 - Proxy-Authenticate
@@ -166,6 +157,9 @@ StreamingResponse 流式返回给客户端
 - Trailers
 - Transfer-Encoding
 - Upgrade
+
+**额外过滤：**
+- Content-Length（因为请求体可能被修改，由 httpx 自动重新计算）
 
 ### System Prompt 替换逻辑
 
@@ -177,6 +171,16 @@ StreamingResponse 流式返回给客户端
 6. 重新序列化为 JSON 并返回
 
 失败时自动回退到原始请求体，确保服务稳定性。
+
+### HTTP 客户端生命周期管理
+
+使用 FastAPI 的 `lifespan` 上下文管理器：
+
+1. **启动时**：创建共享的 `httpx.AsyncClient` 实例
+2. **运行时**：所有请求复用同一个客户端，享受连接池优势
+3. **关闭时**：优雅关闭客户端，释放所有连接资源
+
+这种设计避免了每次请求都创建新客户端，解决了流式响应中客户端过早关闭的问题。
 
 ## 📝 日志输出
 
@@ -190,12 +194,14 @@ StreamingResponse 流式返回给客户端
 [System Replacement] Successfully modified body (original size: 123 bytes, new size: 145 bytes)
 ```
 
-## 🛡️ 安全性考虑
+## 🛡️ 安全性与稳定性
 
 - ❌ **不跟随重定向**：`follow_redirects=False` 防止重定向攻击
 - ⏱️ **请求超时**：60秒超时防止资源耗尽
 - 🔍 **错误处理**：上游请求失败时返回 502 状态码
-- 📋 **日志记录**：请求体内容被记录（注意不要泄露敏感信息）
+- 🔧 **自动容错**：Content-Length 自动计算，避免修改请求体导致的协议错误
+- 🔄 **连接管理**：共享客户端池确保连接正确关闭，避免资源泄漏
+- 📋 **日志记录**：请求体内容被记录（生产环境建议移除敏感信息日志）
 
 ## 🤝 贡献
 
