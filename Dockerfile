@@ -17,7 +17,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # 复制应用代码
-COPY anthropic_proxy.py .
+COPY app.py .
 
 # 复制环境变量示例文件（可选）
 # COPY .env.example .
@@ -30,4 +30,4 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
     CMD python -c "import httpx; r = httpx.get('http://localhost:8088/health', timeout=2); exit(0 if r.status_code == 200 else 1)"
 
 # 启动应用
-CMD ["uvicorn", "anthropic_proxy:app", "--host", "0.0.0.0", "--port", "8088"]
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8088"]

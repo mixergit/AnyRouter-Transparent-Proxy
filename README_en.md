@@ -90,7 +90,7 @@ pip install fastapi uvicorn httpx python-dotenv
 cp .env.example .env
 
 # Start the service
-python anthropic_proxy.py
+python app.py
 ```
 
 The service will start at `http://0.0.0.0:8088`.

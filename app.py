@@ -295,4 +295,4 @@ async def proxy(path: str, request: Request):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("anthropic_proxy:app", host="0.0.0.0", port=8088, reload=True)
+    uvicorn.run("app:app", host="0.0.0.0", port=8088, reload=True)

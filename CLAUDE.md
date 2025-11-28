@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 This is a FastAPI-based transparent HTTP proxy for Anthropic API requests. It forwards all incoming requests to a configured target base URL while properly handling headers, streaming responses, and maintaining transparency.
 
 **Key Architecture:**
-- Single-file application (`anthropic_proxy.py`) using FastAPI
+- Single-file application (`app.py`) using FastAPI
 - Catch-all route handler proxies all HTTP methods (GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD)
 - Uses `httpx.AsyncClient` for upstream requests with streaming support
 - Headers are filtered to remove hop-by-hop headers per RFC 7230
@@ -32,17 +32,17 @@ pip install fastapi uvicorn httpx
 ### Running the Proxy
 ```bash
 # Development mode with auto-reload
-python anthropic_proxy.py
+python app.py
 
 # Or using uvicorn directly
-uvicorn anthropic_proxy:app --host 0.0.0.0 --port 8080 --reload
+uvicorn app:app --host 0.0.0.0 --port 8080 --reload
 ```
 
 The proxy will start on `http://0.0.0.0:8080` by default.
 
 ## Configuration
 
-**Important configuration variables in `anthropic_proxy.py`:**
+**Important configuration variables in `app.py`:**
 
 - `TARGET_BASE` (line 11): The upstream target URL to proxy requests to
 - `PRESERVE_HOST` (line 12): Whether to preserve the original Host header (default: False)
